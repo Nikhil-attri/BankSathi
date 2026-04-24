@@ -1,0 +1,72 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: banksathi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: banksathi
+      POSTGRES_PASSWORD: banksathi
+      POSTGRES_DB: banksathi
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: banksathi-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+    container_name: banksathi-backend
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://banksathi:banksathi@postgres:5432/banksathi?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: replace-me
+      ML_BASE_URL: http://ml:8000
+    ports:
+      - "4000:4000"
+    command: sh -c "npx prisma db push && npm run dev"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  ml:
+    build:
+      context: ./ml
+    container_name: banksathi-ml
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ml:/app
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: banksathi-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_API_BASE: http://localhost:4000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
